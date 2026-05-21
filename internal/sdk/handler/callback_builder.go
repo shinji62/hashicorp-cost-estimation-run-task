@@ -1,6 +1,3 @@
-// Copyright IBM Corp. 2023, 2024
-// SPDX-License-Identifier: MPL-2.0
-
 package handler
 
 import (
@@ -13,12 +10,7 @@ import (
 const TypeTaskResults = "task-results"
 
 type callbackResponse struct {
-	Data callbackData `json:"data"`
-}
-
-type callbackData struct {
-	Type       string       `json:"type"`
-	Attributes api.Response `json:"attributes"`
+	Data api.CallbackData `json:"data"`
 }
 
 type CallbackBuilder struct {
@@ -28,7 +20,7 @@ type CallbackBuilder struct {
 func NewCallbackBuilder(status api.TaskStatus) *CallbackBuilder {
 	return &CallbackBuilder{
 		resp: callbackResponse{
-			Data: callbackData{
+			Data: api.CallbackData{
 				Type: TypeTaskResults,
 				Attributes: api.Response{
 					Status: status,
@@ -40,6 +32,67 @@ func NewCallbackBuilder(status api.TaskStatus) *CallbackBuilder {
 
 func (cb *CallbackBuilder) WithMessage(message string) *CallbackBuilder {
 	cb.resp.Data.Attributes.Message = message
+	return cb
+}
+
+func (cb *CallbackBuilder) WithURL(url string) *CallbackBuilder {
+	cb.resp.Data.Attributes.URL = url
+	return cb
+}
+
+func (cb *CallbackBuilder) WithOutcomes(outcomes []api.Outcome) *CallbackBuilder {
+	// Convert legacy Outcome format to new relationships format
+	outcomeData := make([]api.OutcomeData, 0, len(outcomes))
+	for _, outcome := range outcomes {
+		outcomeData = append(outcomeData, api.OutcomeData{
+			Type: "task-result-outcomes",
+			Attributes: api.OutcomeAttributes{
+				OutcomeID:   outcome.OutcomeID,
+				Description: outcome.Description,
+				Body:        outcome.Body,
+				URL:         outcome.URL,
+			},
+		})
+	}
+
+	if len(outcomeData) > 0 {
+		cb.resp.Data.Relationships = &api.CallbackRelationships{
+			Outcomes: &api.OutcomesRelationship{
+				Data: outcomeData,
+			},
+		}
+	}
+	return cb
+}
+
+func (cb *CallbackBuilder) AddOutcome(outcome api.Outcome) *CallbackBuilder {
+	// Convert single outcome to new relationships format
+	outcomeData := api.OutcomeData{
+		Type: "task-result-outcomes",
+		Attributes: api.OutcomeAttributes{
+			OutcomeID:   outcome.OutcomeID,
+			Description: outcome.Description,
+			Body:        outcome.Body,
+			URL:         outcome.URL,
+		},
+	}
+
+	if cb.resp.Data.Relationships == nil {
+		cb.resp.Data.Relationships = &api.CallbackRelationships{
+			Outcomes: &api.OutcomesRelationship{
+				Data: []api.OutcomeData{outcomeData},
+			},
+		}
+	} else if cb.resp.Data.Relationships.Outcomes == nil {
+		cb.resp.Data.Relationships.Outcomes = &api.OutcomesRelationship{
+			Data: []api.OutcomeData{outcomeData},
+		}
+	} else {
+		cb.resp.Data.Relationships.Outcomes.Data = append(
+			cb.resp.Data.Relationships.Outcomes.Data,
+			outcomeData,
+		)
+	}
 	return cb
 }
 

@@ -1,6 +1,3 @@
-// Copyright IBM Corp. 2023, 2024
-// SPDX-License-Identifier: MPL-2.0
-
 package handler
 
 import (

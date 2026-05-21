@@ -1,6 +1,3 @@
-// Copyright IBM Corp. 2023, 2024
-// SPDX-License-Identifier: MPL-2.0
-
 package runtask
 
 import (
@@ -8,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
-	"os"
 
 	"github.com/gorilla/mux"
 	tfjson "github.com/hashicorp/terraform-json"
@@ -107,10 +104,10 @@ func handleTFCRequestWrapper(task *ScaffoldingRunTask, original func(http.Respon
 
 		// Get TFC Plan if the task is running in the post-plan or pre-apply stages
 		if runTaskReq.Stage == api.PostPlan || runTaskReq.Stage == api.PreApply {
-			plan, err := retrieveTFCPlan(runTaskReq)
+			plan, err := retrieveTFCPlan(runTaskReq, task.logger)
 
 			if err != nil {
-				task.logger.Println("Error occurred while retrieving plan from TFC")
+				task.logger.Printf("Error occurred while retrieving plan from TFC: %v", err)
 				http.Error(w, "Bad Request: "+err.Error(), http.StatusNotFound)
 				return
 			}
@@ -155,12 +152,13 @@ func sendTFCCallbackResponse() func(w http.ResponseWriter, r *http.Request, reqB
 
 }
 
-func retrieveTFCPlan(req api.Request) (tfjson.Plan, error) {
+func retrieveTFCPlan(req api.Request, logger *log.Logger) (tfjson.Plan, error) {
+	logger.Printf("Retrieving plan from TFC URL: %s", req.PlanJSONAPIURL)
 
 	// Call TFC to get plan
 	resp, err := sendTFCRequest(req.PlanJSONAPIURL, "GET", req.AccessToken, nil)
 	if err != nil {
-		return tfjson.Plan{}, err
+		return tfjson.Plan{}, fmt.Errorf("failed to send request to TFC: %w", err)
 	}
 
 	var tfPlan tfjson.Plan
@@ -169,18 +167,25 @@ func retrieveTFCPlan(req api.Request) (tfjson.Plan, error) {
 		return tfPlan, fmt.Errorf("expected Terraform plan from TFC but received none")
 	}
 
-	respBody, err := io.ReadAll(resp.Body)
+	// Check HTTP status code
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		return tfPlan, fmt.Errorf("TFC returned status %d: %s", resp.StatusCode, string(respBody))
+	}
 
+	respBody, err := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
 
 	if err != nil {
-		return tfPlan, err
+		return tfPlan, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	err = json.Unmarshal(respBody, &tfPlan)
+	logger.Printf("Received plan response body length: %d bytes", len(respBody))
 
+	err = json.Unmarshal(respBody, &tfPlan)
 	if err != nil {
-		return tfPlan, err
+		return tfPlan, fmt.Errorf("failed to unmarshal plan JSON: %w", err)
 	}
 
 	return tfPlan, nil
@@ -189,12 +194,17 @@ func retrieveTFCPlan(req api.Request) (tfjson.Plan, error) {
 func sendTFCRequest(url string, method string, accessToken string, body []byte) (*http.Response, error) {
 	req, err := http.NewRequest(method, url, bytes.NewReader(body))
 	if err != nil {
-		fmt.Printf("client: could not create request: %s\n", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("could not create request: %w", err)
 	}
 
 	// Required headers to send to TFC
 	req.Header.Set("Content-Type", api.JsonApiMediaTypeHeader)
 	req.Header.Set("Authorization", "Bearer "+accessToken)
-	return http.DefaultClient.Do(req)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+
+	return resp, nil
 }

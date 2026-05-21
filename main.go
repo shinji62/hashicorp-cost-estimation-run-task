@@ -1,22 +1,32 @@
-// Copyright IBM Corp. 2023, 2024
-// SPDX-License-Identifier: MPL-2.0
-
 package main
 
 import (
-	"flag"
+	"os"
 
+	"github.com/hashicorp/terraform-run-task-scaffolding-go/internal/config"
+	"github.com/hashicorp/terraform-run-task-scaffolding-go/internal/helpers"
 	"github.com/hashicorp/terraform-run-task-scaffolding-go/internal/runtask"
 )
 
 func main() {
-	// Define command-line parameters
-	var addr = flag.String("addr", "22180", "the port the run task HTTP server will run on")
-	var path = flag.String("path", "/runtask", "the URL path for the run task to receive HTTP request from TFC or TFE")
-	var hmacKey = flag.String("hmacKey", "", "the customizable secret which TFC or TFE will use to sign requests to the run task")
-	flag.Parse()
+	// Load configuration from CLI args, files, and environment variables
+	cfg, err := config.Load()
+	if err != nil {
+		helpers.Errorf("Failed to load configuration: %v", err)
+		os.Exit(1)
+	}
+
+	// Initialize logger with configuration
+	if err := helpers.Initialize(cfg.LogLevel, cfg.LogFormat); err != nil {
+		// If initialization fails, continue with defaults
+		helpers.Warnf("Failed to initialize logger: %v", err)
+	}
+
+	helpers.Infof("Starting HCP Terraform Cost Estimation Run Task")
+	helpers.Infof("Server address: %s, Path: %s", cfg.ServerAddr, cfg.ServerPath)
 
 	task := runtask.NewRunTask()
-	task.Configure(*addr, *path, *hmacKey)
+	task.SetAppConfig(cfg)
+	task.Configure(cfg.ServerAddr, cfg.ServerPath, cfg.HMACKey)
 	runtask.HandleRequests(task)
 }

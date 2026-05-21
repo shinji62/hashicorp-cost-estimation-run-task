@@ -1,6 +1,3 @@
-// Copyright IBM Corp. 2023, 2024
-// SPDX-License-Identifier: MPL-2.0
-
 package api
 
 import (
@@ -65,8 +62,35 @@ type CallbackResponse struct {
 }
 
 type CallbackData struct {
-	Type       string   `json:"type"`
-	Attributes Response `json:"attributes"`
+	Type          string                 `json:"type"`
+	Attributes    Response               `json:"attributes"`
+	Relationships *CallbackRelationships `json:"relationships,omitempty"`
+}
+
+type CallbackRelationships struct {
+	Outcomes *OutcomesRelationship `json:"outcomes,omitempty"`
+}
+
+type OutcomesRelationship struct {
+	Data []OutcomeData `json:"data"`
+}
+
+type OutcomeData struct {
+	Type       string            `json:"type"`
+	Attributes OutcomeAttributes `json:"attributes"`
+}
+
+type OutcomeAttributes struct {
+	OutcomeID   string                  `json:"outcome-id,omitempty"`
+	Description string                  `json:"description,omitempty"`
+	Body        string                  `json:"body,omitempty"`
+	URL         string                  `json:"url,omitempty"`
+	Tags        map[string][]OutcomeTag `json:"tags,omitempty"`
+}
+
+type OutcomeTag struct {
+	Label string `json:"label"`
+	Level string `json:"level,omitempty"`
 }
 
 type Response struct {
@@ -76,4 +100,13 @@ type Response struct {
 	Status TaskStatus `json:"status"`
 	// URL that the user can use to get more information from the external service
 	URL string `json:"url,omitempty"`
+}
+
+// Outcome represents a detailed result from the run task (legacy, kept for compatibility)
+type Outcome struct {
+	OutcomeID   string              `json:"outcome-id,omitempty"`
+	Description string              `json:"description,omitempty"`
+	Body        string              `json:"body,omitempty"`
+	URL         string              `json:"url,omitempty"`
+	Tags        map[string][]string `json:"tags,omitempty"`
 }
