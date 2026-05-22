@@ -9,7 +9,7 @@ require (
 	github.com/sirupsen/logrus v1.9.4
 	golang.org/x/text v0.37.0
 	google.golang.org/adk v1.3.0
-	google.golang.org/genai v1.57.0
+	google.golang.org/genai v1.58.0
 )
 
 require (
